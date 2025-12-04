@@ -1,5 +1,5 @@
 /**
- * Lalafo → Telegram бот под Deno Deploy.
+ * Lalafo → Telegram бот под Deno Deploy / GitHub Actions.
  *
  * Условия:
  *  - город: только Бишкек
@@ -12,7 +12,7 @@
 const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
 const CHAT_ID = Deno.env.get("TELEGRAM_CHAT_ID") ?? "";
 
-// Жёстко фиксируем Бишкек
+// Город – Бишкек
 const CITY_SLUG = "bishkek";
 
 // Базовый URL Lalafo
@@ -28,7 +28,7 @@ const MAX_PRICE = 50000;
 // Разрешённое количество комнат
 const ALLOWED_ROOMS = new Set([1, 2]);
 
-// Лимиты для парсинга (их можно менять через переменные окружения)
+// Лимиты для парсинга (можно переопределять через env)
 const ADS_LIMIT = Number(Deno.env.get("ADS_LIMIT") ?? "30"); // максимум объявлений за прогон
 const PAGES = Number(Deno.env.get("PAGES") ?? "3"); // сколько страниц смотреть
 
@@ -46,6 +46,8 @@ interface Ad {
   images: string[];
   description: string | null;
 }
+
+/* ============ KV (fallback, если openKv нет) ============ */
 
 type KvLike = {
   get: (key: unknown[]) => Promise<{ value: unknown | null }>;
@@ -95,7 +97,8 @@ async function fetchPage(page: number): Promise<string> {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "Accept":
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
       "Connection": "keep-alive",
       "Upgrade-Insecure-Requests": "1",
@@ -143,7 +146,8 @@ async function fetchAd(urlPath: string): Promise<string | null> {
     headers: {
       "User-Agent":
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+      "Accept":
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
       "Connection": "keep-alive",
       "Upgrade-Insecure-Requests": "1",
@@ -342,7 +346,7 @@ function isAdOk(ad: Ad): boolean {
   return true;
 }
 
-/* ================= KV ================= */
+/* ================= KV ОБЁРТКИ ================= */
 
 async function hasSeen(id: string): Promise<boolean> {
   if (!kv) return false;
@@ -383,7 +387,9 @@ function escapeHtml(text: string): string {
 
 async function sendAd(ad: Ad): Promise<boolean> {
   const title = escapeHtml(ad.title ?? "");
-  const price = ad.price != null ? `${ad.price.toLocaleString("ru-RU")} KGS` : "—";
+  const price = ad.price != null
+    ? `${ad.price.toLocaleString("ru-RU")} KGS`
+    : "—";
   const rooms = ad.rooms != null ? `${ad.rooms} комн.` : "—";
   const city = ad.city ?? "—";
   const phone = ad.phone ?? "—";
@@ -522,23 +528,37 @@ async function runOnce() {
   console.log("Done");
 }
 
-/* ================= CRON / SERVER ================= */
+/* ================= ENTRYPOINT ================= */
 
-if ((Deno as any).cron) {
-  (Deno as any).cron("lalafo-scan", "*/30 * * * *", async () => {
-    try {
-      await runOnce();
-    } catch (e) {
-      console.error("Cron error", e);
-    }
-  });
+async function main() {
+  await runOnce();
 }
 
-Deno.serve(async (req) => {
-  const url = new URL(req.url);
-  if (url.pathname === "/run") {
-    await runOnce();
-    return new Response("ok\n");
+// GitHub Actions: env GITHUB_ACTIONS = "true"
+const isGithubActions = Deno.env.get("GITHUB_ACTIONS") === "true";
+
+if (isGithubActions) {
+  // В GitHub Actions — один прогон и выход
+  await main();
+  Deno.exit(0);
+} else {
+  // Режим Deno Deploy / обычный сервер
+  if ((Deno as any).cron) {
+    (Deno as any).cron("lalafo-scan", "*/30 * * * *", async () => {
+      try {
+        await runOnce();
+      } catch (e) {
+        console.error("Cron error", e);
+      }
+    });
   }
-  return new Response("alive\n");
-});
+
+  Deno.serve(async (req) => {
+    const url = new URL(req.url);
+    if (url.pathname === "/run") {
+      await runOnce();
+      return new Response("ok\n");
+    }
+    return new Response("alive\n");
+  });
+}
