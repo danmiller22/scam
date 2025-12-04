@@ -5,8 +5,8 @@
  *  - город: только Бишкек
  *  - 1–2 комнаты
  *  - цена ≤ 50 000 KGS
- *  - только собственники
- *  - обязательно есть номер телефона (начинается с 996)
+ *
+ * Фильтры по "собственник" и телефону ослаблены, чтобы было больше объявлений.
  */
 
 const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") ?? "";
@@ -29,8 +29,8 @@ const MAX_PRICE = 50000;
 const ALLOWED_ROOMS = new Set([1, 2]);
 
 // Лимиты для парсинга (можно переопределять через env)
-const ADS_LIMIT = Number(Deno.env.get("ADS_LIMIT") ?? "30"); // максимум объявлений за прогон
-const PAGES = Number(Deno.env.get("PAGES") ?? "3"); // сколько страниц смотреть
+const ADS_LIMIT = Number(Deno.env.get("ADS_LIMIT") ?? "60"); // максимум объявлений за прогон
+const PAGES = Number(Deno.env.get("PAGES") ?? "5"); // сколько страниц смотреть
 
 // Структура объявления
 interface Ad {
@@ -327,22 +327,20 @@ function isRoomsOk(ad: Ad): boolean {
   return ALLOWED_ROOMS.has(ad.rooms);
 }
 
-function isOwnerOk(ad: Ad): boolean {
-  if (ad.isOwner == null) return false;
-  return ad.isOwner === true;
+// Оставляем, но не используем — фильтр по собственнику и телефону отключён
+function isOwnerOk(_ad: Ad): boolean {
+  return true;
 }
 
-function isPhoneOk(ad: Ad): boolean {
-  if (!ad.phone) return false;
-  return /^(\+?996|\b996)\d{9}$/.test(ad.phone.replace(/\s+/g, ""));
+function isPhoneOk(_ad: Ad): boolean {
+  return true;
 }
 
 function isAdOk(ad: Ad): boolean {
   if (!isCityOk(ad)) return false;
   if (!isPriceOk(ad)) return false;
   if (!isRoomsOk(ad)) return false;
-  if (!isOwnerOk(ad)) return false;
-  if (!isPhoneOk(ad)) return false;
+  // Фильтры по owner/phone отключены для увеличения числа объявлений
   return true;
 }
 
