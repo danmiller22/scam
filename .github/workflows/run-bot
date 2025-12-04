@@ -1,0 +1,28 @@
+name: Lalafo Bot
+
+on:
+  schedule:
+    # Запуск каждые 10 минут (минимум для GitHub Actions — 5 минут)
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v1.x
+
+      - name: Run bot
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ADS_LIMIT: ${{ secrets.ADS_LIMIT }}
+          PAGES: ${{ secrets.PAGES }}
+        run: deno run --allow-net --allow-env main.ts
